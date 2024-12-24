@@ -16,7 +16,7 @@ const deployStack = (client: Client) => {
     TemplateURL: templateUrl,
     Parameters: [
       {
-        ParameterKey: 'stackId',
+        ParameterKey: 'clientId',
         ParameterValue: client.id,
       },
     ],

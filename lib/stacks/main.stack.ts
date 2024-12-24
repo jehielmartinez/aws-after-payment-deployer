@@ -68,7 +68,7 @@ export class MainStack extends cdk.Stack {
       environment: {
         CLIENTS_TABLE: clientsTable.tableName,
         FIFO_QUEUE: fifoQueue.queueUrl,
-        TEMPLATE_URL: 'https://s3.amazonaws.com/your-bucket/template.yml',
+        TEMPLATE_URL: 'https://raw.githubusercontent.com/aws-cloudformation/aws-cloudformation-templates/refs/heads/main/EC2/InstanceWithCfnInit.yaml',
       },
     });
     deployer.addEventSource(new SqsEventSource(fifoQueue));
