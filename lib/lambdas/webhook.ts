@@ -26,6 +26,17 @@ export interface Client {
   status?: string;
 }
 
+// valid body example:
+// {
+//   "type": "invoice.payment_succeeded",
+//   "data": {
+//     "object": {
+//       "customer": "cus_JZB2VZ6wR6J8wz",
+//       "customer_name": "John Doe",
+//       "customer_email": "john@example.com"
+//     }
+//   }
+// }
 const isPaymentConfirmed = (event: any): boolean => {
   const body = JSON.parse(event.body) as EventBody;
   if (body.type === 'invoice.payment_succeeded') {
@@ -51,6 +62,8 @@ const saveClient = async (client: Client) => {
       id: { S: client.id },
       name: { S: client.name },
       email: { S: client.email },
+      createdAt: { S: client.createdAt },
+      status: { S: client.status },
     },
   }).promise();
 }

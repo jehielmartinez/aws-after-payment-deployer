@@ -3,7 +3,7 @@ import * as path from 'path';
 import { Construct } from 'constructs';
 import { AttributeType, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { ManagedPolicy } from 'aws-cdk-lib/aws-iam';
-import { FunctionUrlAuthType, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { FunctionUrlAuthType, HttpMethod, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
@@ -13,7 +13,7 @@ export class MainStack extends cdk.Stack {
     super(scope, id, props);
 
     // DynamoDB table to store the information and status of the clients
-    const clientsTable = new Table(this, 'clients', {
+    const clientsTable = new Table(this, 'ClientsTable', {
       tableName: 'clients',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       readCapacity: 1,
@@ -23,13 +23,14 @@ export class MainStack extends cdk.Stack {
     });
 
     // Dead letter queue to store the messages that failed to be processed, it must be reviewed manually
-    const dlq = new Queue(this, 'deadLetterQueue', {
-      queueName: 'DeadLetterQueue',
+    const dlq = new Queue(this, 'DeadLetterQueue', {
+      queueName: 'DeadLetterQueue.fifo',
+      fifo: true,
       retentionPeriod: cdk.Duration.days(14),
     });
 
     // FIFO (First-In-First-Out) queue to send the messages from the webhook to the deployer
-    const fifoQueue = new Queue(this, 'fifoQueue', {
+    const fifoQueue = new Queue(this, 'FifoQueue', {
       queueName: 'Queue.fifo',
       deadLetterQueue: {
         queue: dlq,
@@ -40,7 +41,7 @@ export class MainStack extends cdk.Stack {
     });
 
     // Lambda function to be used a webhook, it will receive the confirmation from the payment service
-    const webhook = new NodejsFunction(this, 'webhook', {
+    const webhook = new NodejsFunction(this, 'WebhookLambda', {
       runtime: Runtime.NODEJS_LATEST,
       entry: path.join(__dirname, '../lambdas/webhook.ts'),
       functionName: 'webhook',
@@ -50,17 +51,20 @@ export class MainStack extends cdk.Stack {
         FIFO_QUEUE: fifoQueue.queueUrl,
       },
     });
+
+    // Grant permissions to the webhook function
     fifoQueue.grantSendMessages(webhook);
     clientsTable.grantReadWriteData(webhook);
     const webhookUrl = webhook.addFunctionUrl({
       authType: FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: ['*'],
+        allowedMethods: [HttpMethod.POST],
       }
     });
 
     // Lambda function to deploy the infrastructure for the client
-    const deployer = new NodejsFunction(this, 'deployer', {
+    const deployer = new NodejsFunction(this, 'DeployerLambda', {
       runtime: Runtime.NODEJS_LATEST,
       entry: path.join(__dirname, '../lambdas/deployer.ts'),
       functionName: 'deployer',
@@ -68,10 +72,15 @@ export class MainStack extends cdk.Stack {
       environment: {
         CLIENTS_TABLE: clientsTable.tableName,
         FIFO_QUEUE: fifoQueue.queueUrl,
-        TEMPLATE_URL: 'https://raw.githubusercontent.com/aws-cloudformation/aws-cloudformation-templates/refs/heads/main/EC2/InstanceWithCfnInit.yaml',
+        TEMPLATE_URL: 'https://s3.amazonaws.com/cf-templates-REGION/template.yaml',
       },
     });
-    deployer.addEventSource(new SqsEventSource(fifoQueue));
+    deployer.addEventSource(new SqsEventSource(fifoQueue, {
+      batchSize: 1, // Process only one message at a time
+      maxConcurrency: 4 // Concurrent CloudFormation stacks ON_CREATE operations is 5
+    }));
+
+    // Grant permissions to the deployer function
     fifoQueue.grantConsumeMessages(deployer);
     clientsTable.grantReadWriteData(deployer);
     deployer.role?.addManagedPolicy(
