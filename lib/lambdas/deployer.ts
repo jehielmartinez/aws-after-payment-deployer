@@ -8,6 +8,8 @@ const cloudformation = new CloudFormation();
 const tableName = process.env.CLIENTS_TABLE;
 const fifoQueueUrl = process.env.FIFO_QUEUE;
 
+// The cloudformation template is hardcoded in this example, 
+// but it can be retrieved from an S3 bucket or a parameter store
 const getTemplateBody = () => {
   return `
 AWSTemplateFormatVersion: "2010-09-09"
@@ -137,6 +139,7 @@ const deployStack = (client: Client) => {
   const stackName = `Client-${client.id.replace(/[^a-zA-Z0-9-]/g, '')}`;
   return cloudformation.createStack({
     StackName: stackName,
+    //TemplateURL: 'https://s3.amazonaws.com/cloudformation-templates-us-east-1/EC2InstanceWithSecurityGroupSample.template',
     TemplateBody: getTemplateBody(),
     Parameters: [
       {
@@ -187,6 +190,6 @@ export const handler: Handler<SQSEvent> = async (event) => {
     return true;
   } catch (error) {
     console.error('Error processing message:', error);
-    throw error; // This will cause the lambda to fail and SQS will retry the message
+    throw error;
   }
 }

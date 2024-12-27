@@ -1,14 +1,41 @@
-# Welcome to your CDK TypeScript project
+# After Payment Automatic Deployment
 
-This is a blank project for CDK development with TypeScript.
+A serverless scalable application the deploys any cloudformation stack after a payment is made.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Architecture
 
-## Useful commands
+The application uses the following AWS services:
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+- **DynamoDB**: Stores and keeps track of the client information
+  - Table: `Clients`
+  - Stores: ID, name, email, and status
+
+- **SQS Queue**: Decouples and act as a buffer between the payment event and the deployment
+  - Includes Dead Letter Queue (DLQ) for failed messages
+  - Maximum of 3 retries before moving to DLQ
+  - FIFO queue to ensure message order
+
+- **Lambda Function**: Receives the payment event and triggers the deployment
+  - Runtime: Node.js
+  - Two separate functions for payment and deployment ensuring scalablity
+
+## How it Works
+
+![Diagram](./diagram.png)
+
+1. A payment is made by the client
+2. The payment event is sent to the `webhook` lambda function
+3. The `webhook` function validates the payment, stores the client info un DynamoDB and sends a message to the SQS queue.
+4. The `deploy` lambda function is triggered by the SQS message, updates the client info in DynamoDB and deploys the cloudformation stack.
+
+## Development
+
+To use this example you need to customize the following:
+
+- **Payment Gateway**: Replace the `isPaymentConfirmed` function in the `webhook` lambda function with your own payment gateway.
+- **Cloudformation Stack**: Replace the `getTemplateBody` function in the `deployer` lambda function with your own cloudformation stack or use the `TemplateURL` property to point to an existing template.
+- **AWS Account**: Update the `aws-on-demand-stack-deploy.ts` file with your own AWS account number and ensure you have a AWS Profile on your local machine.
+
+## More Information
+
+- **Blog Post**: [How to Deploy a Cloudformation Stack After a Payment is Made]()

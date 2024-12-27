@@ -26,7 +26,8 @@ export interface Client {
   status?: string;
 }
 
-// valid body example:
+// Valid body example, based on Stripe's webhook event object
+// Refactor this function to accommodate to your webhook event object
 // {
 //   "type": "invoice.payment_succeeded",
 //   "data": {
