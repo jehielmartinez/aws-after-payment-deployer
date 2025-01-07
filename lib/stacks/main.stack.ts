@@ -38,6 +38,7 @@ export class MainStack extends cdk.Stack {
       },
       fifo: true,
       contentBasedDeduplication: true,
+      visibilityTimeout: cdk.Duration.minutes(5), // Wait 5 minutes between batches
     });
 
     // Lambda function to be used a webhook, it will receive the confirmation from the payment service
@@ -77,7 +78,8 @@ export class MainStack extends cdk.Stack {
     });
     deployer.addEventSource(new SqsEventSource(fifoQueue, {
       batchSize: 1, // Process only one message at a time
-      maxConcurrency: 4 // Concurrent CloudFormation stacks ON_CREATE operations is 5
+      maxConcurrency: 5, // Concurrent CloudFormation stacks ON_CREATE operations is 5 
+      reportBatchItemFailures: true, // Ensure failed messages are reported
     }));
 
     // Grant permissions to the deployer function
